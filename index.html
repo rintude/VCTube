@@ -1,94 +1,72 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
 <meta charset="UTF-8">
 <title>VCTube</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<!-- PeerJS -->
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 
 <style>
 body {
-    margin: 0;
-    font-family: Arial, sans-serif;
-    background: radial-gradient(circle at top, #1f2937, #020617);
-    color: #fff;
+  margin: 0;
+  background: #020617;
+  color: #fff;
+  font-family: Arial, sans-serif;
 }
-
 header {
-    padding: 12px;
-    text-align: center;
-    font-size: 22px;
-    font-weight: bold;
-    background: #020617;
-    box-shadow: 0 0 20px #0ea5e9;
+  text-align: center;
+  padding: 12px;
+  font-size: 22px;
+  font-weight: bold;
+  box-shadow: 0 0 20px #0ea5e9;
 }
-
 #controls {
-    display: flex;
-    gap: 8px;
-    padding: 10px;
-    justify-content: center;
-    flex-wrap: wrap;
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  padding: 10px;
+  flex-wrap: wrap;
 }
-
 input, button {
-    padding: 10px;
-    border-radius: 6px;
-    border: none;
-    font-size: 14px;
+  padding: 10px;
+  border-radius: 6px;
+  border: none;
 }
-
 input {
-    background: #020617;
-    color: #fff;
-    border: 1px solid #0ea5e9;
+  background: #020617;
+  border: 1px solid #0ea5e9;
+  color: #fff;
 }
-
 button {
-    background: linear-gradient(135deg, #0ea5e9, #22d3ee);
-    color: #000;
-    cursor: pointer;
-    font-weight: bold;
+  background: linear-gradient(135deg,#0ea5e9,#22d3ee);
+  font-weight: bold;
+  cursor: pointer;
 }
-
-button:hover {
-    opacity: 0.85;
+#roomInfo {
+  text-align: center;
+  color: #38bdf8;
 }
-
-#roomCodeDisplay {
-    text-align: center;
-    margin: 5px;
-    font-size: 14px;
-    color: #38bdf8;
-}
-
 #videoGrid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 10px;
-    padding: 10px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit,minmax(180px,1fr));
+  gap: 10px;
+  padding: 10px;
 }
-
 video {
-    width: 100%;
-    height: 180px;
-    object-fit: cover;
-    border-radius: 12px;
-    background: #000;
-    box-shadow: 0 0 15px #0ea5e9;
-    transform: scaleX(-1);
+  width: 100%;
+  height: 180px;
+  object-fit: cover;
+  border-radius: 12px;
+  background: #000;
+  transform: scaleX(-1);
 }
-
-#callControls {
-    text-align: center;
-    padding: 10px;
+#endBtn {
+  text-align: center;
+  padding: 10px;
 }
-
-#callControls button {
-    background: red;
-    color: #fff;
+#endBtn button {
+  background: red;
+  color: white;
 }
 </style>
 </head>
@@ -98,114 +76,81 @@ video {
 <header>VCTube</header>
 
 <div id="controls">
-    <input id="username" placeholder="Your Name">
-    <input id="roomInput" placeholder="Room Code">
-    <button onclick="startRoom()">Create / Join Room</button>
+  <input id="name" placeholder="Your Name">
+  <input id="room" placeholder="Room Code (leave blank to host)">
+  <button onclick="start()">Create / Join</button>
 </div>
 
-<div id="roomCodeDisplay"></div>
-
+<div id="roomInfo"></div>
 <div id="videoGrid"></div>
 
-<div id="callControls" style="display:none;">
-    <button onclick="endCall()">Cut Call</button>
+<div id="endBtn" style="display:none">
+  <button onclick="endCall()">Cut Call</button>
 </div>
 
 <audio id="beep" src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg"></audio>
 
 <script>
-let peer;
-let localStream;
-let connections = {};
-let roomId = "";
-let userName = "";
+let peer, localStream, currentCall;
 
-const MAX_USERS = 10;
+async function start() {
+  const name = nameInput.value.trim();
+  let room = roomInput.value.trim();
 
-async function startRoom() {
-    userName = document.getElementById("username").value.trim();
-    roomId = document.getElementById("roomInput").value.trim();
+  if (!name) return alert("Enter your name");
 
-    if (!userName) return alert("Enter your name");
+  if (!room) {
+    room = Math.random().toString(36).substring(2,8).toUpperCase();
+  }
 
-    if (!roomId) {
-        roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+  roomInfo.innerText = "Room Code: " + room;
+  peer = new Peer(room);
+
+  localStream = await navigator.mediaDevices.getUserMedia({video:true,audio:true});
+  addVideo(localStream);
+
+  peer.on("call", call => {
+    beep.play();
+    if (confirm(call.metadata.name + " wants to join")) {
+      call.answer(localStream);
+      handleCall(call);
+    } else call.close();
+  });
+
+  peer.on("open", id => {
+    if (roomInput.value) {
+      const call = peer.call(room, localStream, {metadata:{name}});
+      handleCall(call);
     }
-
-    document.getElementById("roomCodeDisplay").innerText =
-        "Room Code: " + roomId + " (Share this)";
-
-    peer = new Peer(userName + "-" + roomId, {
-        debug: 1
-    });
-
-    localStream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: true
-    });
-
-    addVideo(localStream, userName);
-
-    peer.on("call", call => {
-        document.getElementById("beep").play();
-
-        if (confirm(call.metadata.name + " wants to join")) {
-            call.answer(localStream);
-            handleCall(call);
-        } else {
-            call.close();
-        }
-    });
-
-    peer.on("open", () => {
-        document.getElementById("callControls").style.display = "block";
-
-        peer.listAllPeers(peers => {
-            peers.filter(p => p.endsWith(roomId)).forEach(p => {
-                if (Object.keys(connections).length < MAX_USERS - 1 && p !== peer.id) {
-                    const call = peer.call(p, localStream, {
-                        metadata: { name: userName }
-                    });
-                    handleCall(call);
-                }
-            });
-        });
-    });
+    endBtn.style.display = "block";
+  });
 }
 
 function handleCall(call) {
-    connections[call.peer] = call;
-
-    call.on("stream", stream => {
-        addVideo(stream, call.metadata?.name || "User");
-    });
-
-    call.on("close", () => {
-        removeVideo(call.peer);
-    });
+  currentCall = call;
+  call.on("stream", stream => addVideo(stream));
 }
 
-function addVideo(stream, name) {
-    const video = document.createElement("video");
-    video.srcObject = stream;
-    video.autoplay = true;
-    video.playsInline = true;
-    video.title = name;
-    document.getElementById("videoGrid").appendChild(video);
-}
-
-function removeVideo(peerId) {
-    const grid = document.getElementById("videoGrid");
-    if (grid.children.length > 0) {
-        grid.removeChild(grid.lastChild);
-    }
+function addVideo(stream) {
+  const v = document.createElement("video");
+  v.srcObject = stream;
+  v.autoplay = true;
+  v.playsInline = true;
+  videoGrid.appendChild(v);
 }
 
 function endCall() {
-    Object.values(connections).forEach(c => c.close());
-    peer.destroy();
-    location.reload();
+  if (currentCall) currentCall.close();
+  if (peer) peer.destroy();
+  location.reload();
 }
+
+const nameInput = document.getElementById("name");
+const roomInput = document.getElementById("room");
+const roomInfo = document.getElementById("roomInfo");
+const videoGrid = document.getElementById("videoGrid");
+const endBtn = document.getElementById("endBtn");
+const beep = document.getElementById("beep");
 </script>
 
 </body>
