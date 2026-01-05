@@ -6,32 +6,25 @@
     <title>VcalL</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
-        :root { --bg: #020617; --panel: #1e293b; --cyan: #22d3ee; --red: #ef4444; }
-        body { margin: 0; font-family: sans-serif; background: var(--bg); color: white; height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+        :root { --bg: #0b0f1a; --card: #161b2b; --cyan: #00f2ff; --red: #ff3e3e; }
+        body { margin: 0; font-family: 'Segoe UI', sans-serif; background: var(--bg); color: white; height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
         
-        /* Setup Screen */
         #setup { position: fixed; inset: 0; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; padding: 20px; }
-        .card { background: var(--panel); padding: 30px; border-radius: 20px; border: 2px solid var(--cyan); width: 100%; max-width: 320px; text-align: center; }
-        input { width: 100%; padding: 14px; margin: 10px 0; border-radius: 10px; border: none; background: #0f172a; color: white; box-sizing: border-box; font-size: 16px; outline: none; }
+        .card { background: var(--card); padding: 25px; border-radius: 20px; border: 1px solid var(--cyan); width: 100%; max-width: 300px; text-align: center; box-shadow: 0 0 20px rgba(0, 242, 255, 0.15); }
+        input { width: 100%; padding: 12px; margin: 8px 0; border-radius: 8px; border: 1px solid #2d364d; background: #0b0f1a; color: white; box-sizing: border-box; font-size: 16px; outline: none; }
         
-        /* Buttons */
-        .btn { padding: 14px; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 14px; transition: 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px; }
-        .btn-main { background: var(--cyan); color: var(--bg); width: 100%; margin-top: 10px; }
-        .btn-control { background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.3); flex: 1; }
-        .btn-red { background: var(--red); color: white; flex: 1.5; }
-
-        /* Video Layout (WhatsApp Style) */
-        #video-container { flex: 1; display: none; flex-direction: column; background: #000; position: relative; }
-        .v-box { flex: 1; position: relative; overflow: hidden; border: 1px solid #111; }
+        .btn { width: 100%; padding: 12px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 14px; margin-top: 10px; transition: 0.2s; }
+        .btn-cyan { background: var(--cyan); color: #000; }
+        .btn-outline { background: transparent; border: 1px solid var(--cyan); color: var(--cyan); }
+        
+        #video-grid { flex: 1; display: none; flex-direction: column; background: #000; }
+        .v-box { flex: 1; position: relative; border-bottom: 1px solid #222; overflow: hidden; }
         video { width: 100%; height: 100%; object-fit: cover; background: #000; }
         .mirror { transform: scaleX(-1); }
-        .tag { position: absolute; bottom: 10px; left: 10px; background: rgba(0,0,0,0.5); padding: 4px 10px; border-radius: 5px; font-size: 12px; z-index: 2; }
+        .tag { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.6); padding: 2px 10px; border-radius: 4px; font-size: 11px; color: var(--cyan); border-left: 2px solid var(--cyan); }
 
-        /* Controls Footer */
-        #footer { display: none; padding: 15px; background: var(--panel); gap: 10px; border-top: 1px solid #334155; }
-
-        /* Calling Alert */
-        #incoming-ui { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 200; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+        #controls { display: none; padding: 15px; background: var(--card); gap: 10px; }
+        #incoming { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 200; flex-direction: column; align-items: center; justify-content: center; }
     </style>
 </head>
 <body>
@@ -39,113 +32,105 @@
     <audio id="beep" src="https://www.soundjay.com/buttons/sounds/button-37a.mp3" loop></audio>
 
     <div id="setup">
-        <h1 style="color:var(--cyan); letter-spacing:8px; margin-bottom: 20px;">VcalL</h1>
+        <h1 style="color:var(--cyan); letter-spacing:10px; margin-bottom: 20px;">VcalL</h1>
         <div class="card">
             <input type="text" id="uName" placeholder="Your Name">
-            <input type="text" id="rCode" placeholder="Room Code">
-            <button class="btn btn-main" onclick="init()">CONNECT</button>
+            <input type="text" id="rCode" placeholder="Room Code (eg. 123)">
+            <button class="btn btn-cyan" onclick="start(true)">START AS HOST</button>
+            <button class="btn btn-outline" onclick="start(false)">JOIN AS GUEST</button>
         </div>
     </div>
 
-    <div id="incoming-ui">
-        <h2 style="color:var(--cyan)">Partner is Calling...</h2>
-        <div style="display:flex; gap:15px; width:80%; max-width:300px;">
-            <button class="btn btn-main" onclick="accept()">ACCEPT</button>
-            <button class="btn btn-red" onclick="location.reload()">REJECT</button>
-        </div>
+    <div id="incoming">
+        <h2 style="color:var(--cyan)">Partner Requesting...</h2>
+        <button class="btn btn-cyan" style="width:200px" onclick="accept()">ACCEPT CALL</button>
+        <button class="btn btn-outline" style="width:200px; border-color:var(--red); color:var(--red);" onclick="location.reload()">REJECT</button>
     </div>
 
-    <div id="video-container">
+    <div id="video-grid">
         <div class="v-box">
             <video id="remoteVid" autoplay playsinline></video>
-            <div class="tag">Partner</div>
+            <div class="tag">PARTNER</div>
         </div>
         <div class="v-box">
             <video id="localVid" class="mirror" autoplay playsinline muted></video>
-            <div class="tag">You</div>
+            <div class="tag">YOU</div>
         </div>
     </div>
 
-    <div id="footer">
-        <button class="btn btn-control" onclick="flipCamera()">Flip Camera</button>
-        <button class="btn btn-red" onclick="location.reload()">End Call</button>
+    <div id="controls">
+        <button class="btn btn-outline" onclick="flip()">FLIP CAMERA</button>
+        <button class="btn btn-cyan" style="background:var(--red); color:white;" onclick="location.reload()">END</button>
     </div>
 
     <script>
-        let peer, myStream, activeCall;
-        let currentFacingMode = "user";
-        const beep = document.getElementById('beep');
+        let peer, myStream, callInstance, isHost;
+        let mode = "user";
 
-        async function init() {
+        async function start(hostMode) {
             const name = document.getElementById('uName').value;
             const room = document.getElementById('rCode').value;
-            if (!name || !room) return alert("Please fill details");
+            if(!name || !room) return alert("Fill Name and Room Code");
+            isHost = hostMode;
 
             try {
-                // Get Camera with STUN server config for firewalls
-                myStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: currentFacingMode }, audio: true });
+                myStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: mode }, audio: true });
                 document.getElementById('setup').style.display = 'none';
-                document.getElementById('video-container').style.display = 'flex';
-                document.getElementById('footer').style.display = 'flex';
+                document.getElementById('video-grid').style.display = 'flex';
+                document.getElementById('controls').style.display = 'flex';
                 document.getElementById('localVid').srcObject = myStream;
 
-                // Peer configuration with Google STUN servers for global connectivity
-                const config = {
-                    config: { 'iceServers': [{ 'urls': 'stun:stun.l.google.com:19302' }, { 'urls': 'stun:stun1.l.google.com:19302' }] }
-                };
+                // STUN servers help bypass mobile firewall/NAT
+                const peerConfig = { config: { 'iceServers': [{ 'urls': 'stun:stun.l.google.com:19302' }, { 'urls': 'stun:stun1.l.google.com:19302' }] } };
+                
+                // If Host, ID is the Room Code. If Guest, ID is random.
+                peer = hostMode ? new Peer('vcall-' + room, peerConfig) : new Peer(peerConfig);
 
-                peer = new Peer('vcal-' + room, config);
-
-                peer.on('open', () => console.log("Host ready"));
-
-                peer.on('call', (call) => {
-                    activeCall = call;
-                    beep.play().catch(() => {});
-                    document.getElementById('incoming-ui').style.display = 'flex';
-                });
-
-                peer.on('error', (err) => {
-                    if (err.type === 'id-taken') {
-                        // If room busy, we are the guest. Call the host.
-                        const guest = new Peer(config);
-                        guest.on('open', () => {
-                            const call = guest.call('vcal-' + room, myStream);
-                            setupStream(call);
-                        });
+                peer.on('open', (id) => {
+                    if(!isHost) {
+                        // Guest automatically calls the Host
+                        const call = peer.call('vcall-' + room, myStream);
+                        handleStream(call);
                     }
                 });
-            } catch (e) { alert("Camera Error: " + e); }
+
+                peer.on('call', (call) => {
+                    callInstance = call;
+                    document.getElementById('beep').play();
+                    document.getElementById('incoming').style.display = 'flex';
+                });
+
+                peer.on('error', (e) => alert("Connection Error. Try a different Room Code."));
+
+            } catch (e) { alert("Camera Permission Required"); }
         }
 
         function accept() {
-            beep.pause();
-            document.getElementById('incoming-ui').style.display = 'none';
-            activeCall.answer(myStream);
-            setupStream(activeCall);
+            document.getElementById('beep').pause();
+            document.getElementById('incoming').style.display = 'none';
+            callInstance.answer(myStream);
+            handleStream(callInstance);
         }
 
-        function setupStream(call) {
-            call.on('stream', (remoteStream) => {
+        function handleStream(call) {
+            call.on('stream', (userStream) => {
                 const rVid = document.getElementById('remoteVid');
-                rVid.srcObject = remoteStream;
+                rVid.srcObject = userStream;
                 rVid.onloadedmetadata = () => rVid.play();
             });
         }
 
-        async function flipCamera() {
-            currentFacingMode = currentFacingMode === "user" ? "environment" : "user";
-            if (myStream) {
-                myStream.getTracks().forEach(track => track.stop());
-                myStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: currentFacingMode }, audio: true });
-                document.getElementById('localVid').srcObject = myStream;
-                document.getElementById('localVid').classList.toggle('mirror', currentFacingMode === "user");
-                
-                // If in active call, replace the track
-                if (activeCall && activeCall.peerConnection) {
-                    const videoTrack = myStream.getVideoTracks()[0];
-                    const sender = activeCall.peerConnection.getSenders().find(s => s.track.kind === 'video');
-                    if(sender) sender.replaceTrack(videoTrack);
-                }
+        async function flip() {
+            mode = (mode === "user") ? "environment" : "user";
+            myStream.getTracks().forEach(t => t.stop());
+            myStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: mode }, audio: true });
+            document.getElementById('localVid').srcObject = myStream;
+            document.getElementById('localVid').classList.toggle('mirror', mode === "user");
+            
+            if(callInstance && callInstance.peerConnection) {
+                const videoTrack = myStream.getVideoTracks()[0];
+                const sender = callInstance.peerConnection.getSenders().find(s => s.track.kind === 'video');
+                if(sender) sender.replaceTrack(videoTrack);
             }
         }
     </script>
