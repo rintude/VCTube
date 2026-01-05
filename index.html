@@ -6,109 +6,132 @@
     <title>VcalL</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
-        :root { --bg: #0f172a; --panel: #1e293b; --cyan: #22d3ee; --red: #ef4444; }
-        body { margin: 0; font-family: sans-serif; background: var(--bg); color: white; height: 100vh; display: flex; flex-direction: column; }
+        :root { --bg: #020617; --panel: #1e293b; --cyan: #22d3ee; --red: #ef4444; }
+        body { margin: 0; font-family: 'Segoe UI', sans-serif; background: var(--bg); color: white; height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
         
-        #setup { position: fixed; inset: 0; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; padding: 20px; }
-        .card { background: var(--panel); padding: 30px; border-radius: 20px; border: 2px solid var(--cyan); width: 100%; max-width: 300px; text-align: center; }
-        input { width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px; border: none; background: #0f172a; color: white; box-sizing: border-box; }
+        #setup { position: fixed; inset: 0; background: radial-gradient(circle, #1e293b, #020617); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; padding: 20px; }
+        .card { background: var(--panel); padding: 30px; border-radius: 20px; border: 2px solid var(--cyan); width: 100%; max-width: 320px; text-align: center; box-shadow: 0 0 20px rgba(34, 211, 238, 0.2); }
+        input { width: 100%; padding: 14px; margin: 10px 0; border-radius: 10px; border: none; background: #0f172a; color: white; box-sizing: border-box; font-size: 16px; }
         
-        .btn { width: 100%; padding: 12px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
+        .btn { width: 100%; padding: 14px; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; transition: 0.2s; font-size: 16px; }
         .btn-main { background: var(--cyan); color: var(--bg); margin-top: 10px; }
+        .btn-main:active { transform: scale(0.98); }
         
-        #video-grid { flex: 1; display: grid; grid-template-rows: 1fr 1fr; gap: 10px; padding: 10px; display: none; }
-        .v-box { background: black; border-radius: 15px; overflow: hidden; position: relative; border: 1px solid #334155; }
-        video { width: 100%; height: 100%; object-fit: cover; }
+        #video-grid { flex: 1; display: none; grid-template-rows: 1fr 1fr; gap: 10px; padding: 10px; }
+        .v-box { background: #000; border-radius: 15px; overflow: hidden; position: relative; border: 2px solid #334155; }
+        video { width: 100%; height: 100%; object-fit: cover; background: #000; }
         .mirror { transform: scaleX(-1); }
-        .tag { position: absolute; bottom: 10px; left: 10px; background: rgba(0,0,0,0.5); padding: 3px 10px; border-radius: 5px; font-size: 12px; }
+        .tag { position: absolute; bottom: 12px; left: 12px; background: rgba(0,0,0,0.6); padding: 4px 12px; border-radius: 6px; font-size: 12px; border-left: 3px solid var(--cyan); }
 
-        #controls { display: none; padding: 20px; background: var(--panel); justify-content: center; }
-        #incoming { display: none; position: fixed; top: 20px; width: 90%; left: 5%; background: var(--panel); border: 2px solid var(--cyan); padding: 15px; border-radius: 10px; z-index: 200; text-align: center; }
+        #controls { display: none; padding: 20px; background: var(--panel); justify-content: center; border-top: 1px solid #334155; }
+        #incoming { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 200; flex-direction: column; align-items: center; justify-content: center; }
     </style>
 </head>
 <body>
 
-    <audio id="beep" src="https://www.soundjay.com/buttons/sounds/button-37a.mp3"></audio>
+    <audio id="beep" src="https://www.soundjay.com/buttons/sounds/button-37a.mp3" loop></audio>
 
     <div id="setup">
-        <h1 style="color:var(--cyan); letter-spacing:5px;">VcalL</h1>
+        <h1 style="color:var(--cyan); letter-spacing:8px; margin-bottom: 20px;">VcalL</h1>
         <div class="card">
             <input type="text" id="userName" placeholder="Your Name">
-            <input type="text" id="roomInput" placeholder="Room Code (Digits only)">
-            <button class="btn btn-main" onclick="join()">CONNECT</button>
+            <input type="text" id="roomInput" placeholder="Room Code (eg. 1234)">
+            <button class="btn btn-main" onclick="startApp()">CONNECT</button>
         </div>
     </div>
 
     <div id="incoming">
-        <p>Incoming Call...</p>
-        <button class="btn btn-main" onclick="answerCall()">ACCEPT</button>
+        <h2 style="color:var(--cyan)">Incoming Call...</h2>
+        <div style="display:flex; gap:15px; width:80%; max-width:300px;">
+            <button class="btn btn-main" onclick="answerCall()">ACCEPT</button>
+            <button class="btn" style="background:var(--red); color:white;" onclick="location.reload()">DECLINE</button>
+        </div>
     </div>
 
     <div id="video-grid">
-        <div class="v-box"><video id="localVid" class="mirror" autoplay playsinline muted></video><div class="tag" id="localName">You</div></div>
-        <div class="v-box"><video id="remoteVid" autoplay playsinline></video><div class="tag" id="remoteName">Partner</div></div>
+        <div class="v-box">
+            <video id="localVid" class="mirror" autoplay playsinline muted></video>
+            <div class="tag" id="localTag">You</div>
+        </div>
+        <div class="v-box">
+            <video id="remoteVid" autoplay playsinline></video>
+            <div class="tag" id="remoteTag">Partner</div>
+        </div>
     </div>
 
     <div id="controls">
-        <button class="btn" style="background:var(--red); color:white; width:auto;" onclick="location.reload()">CUT CALL</button>
+        <button class="btn" style="background:var(--red); color:white; width:auto; padding: 10px 40px;" onclick="location.reload()">END CALL</button>
     </div>
 
     <script>
         let peer, myStream, currentCall;
-        const roomInput = document.getElementById('roomInput');
-        const userName = document.getElementById('userName');
+        const beep = document.getElementById('beep');
 
-        async function join() {
-            if (!roomInput.value || !userName.value) return alert("Enter Name and Room Code");
-            
+        async function startApp() {
+            const user = document.getElementById('userName').value;
+            const room = document.getElementById('roomInput').value;
+            if (!user || !room) return alert("Fill all fields");
+
             try {
                 myStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
                 document.getElementById('setup').style.display = 'none';
                 document.getElementById('video-grid').style.display = 'grid';
                 document.getElementById('controls').style.display = 'flex';
-                document.getElementById('localVid').srcObject = myStream;
-                document.getElementById('localName').innerText = userName.value;
+                
+                const localVid = document.getElementById('localVid');
+                localVid.srcObject = myStream;
+                document.getElementById('localTag').innerText = user;
 
-                // Create Peer ID based on Room Code
-                // We'll try to join as either 'host' or 'guest' of that room
-                peer = new Peer('vcall-' + roomInput.value);
+                // Connection Logic
+                peer = new Peer('vcall-' + room);
 
                 peer.on('open', (id) => {
-                    console.log("Waiting for partner in room: " + roomInput.value);
-                });
-
-                // If someone is already there (Host), this logic handles the call
-                peer.on('error', (err) => {
-                    if (err.type === 'id-taken') {
-                        // If ID is taken, it means a Host is already there. We become the Guest.
-                        peer = new Peer(); // Assign random ID to Guest
-                        setTimeout(() => {
-                            const call = peer.call('vcall-' + roomInput.value, myStream);
-                            handleCall(call);
-                        }, 1000);
-                    }
+                    console.log("Waiting as Host...");
                 });
 
                 peer.on('call', (call) => {
                     currentCall = call;
-                    document.getElementById('beep').play();
-                    document.getElementById('incoming').style.display = 'block';
+                    beep.play();
+                    document.getElementById('incoming').style.display = 'flex';
                 });
 
-            } catch (e) { alert("Camera Error: " + e); }
+                peer.on('error', (err) => {
+                    if (err.type === 'id-taken') {
+                        // If Host exists, we are the Guest. Connect to Host.
+                        peer = new Peer(); 
+                        setTimeout(() => {
+                            const call = peer.call('vcall-' + room, myStream);
+                            setupCallListeners(call);
+                        }, 1000);
+                    } else {
+                        console.error(err);
+                    }
+                });
+
+            } catch (e) {
+                alert("Please allow Camera/Mic access.");
+            }
         }
 
         function answerCall() {
+            beep.pause();
             document.getElementById('incoming').style.display = 'none';
-            document.getElementById('beep').pause();
             currentCall.answer(myStream);
-            handleCall(currentCall);
+            setupCallListeners(currentCall);
         }
 
-        function handleCall(call) {
+        function setupCallListeners(call) {
             call.on('stream', (remoteStream) => {
-                document.getElementById('remoteVid').srcObject = remoteStream;
+                const remoteVid = document.getElementById('remoteVid');
+                remoteVid.srcObject = remoteStream;
+                
+                // Force video play (fixes black screen on mobile)
+                remoteVid.onloadedmetadata = () => {
+                    remoteVid.play().catch(e => console.log("Autoplay prevented, waiting for touch."));
+                };
             });
+            
+            call.on('close', () => location.reload());
         }
     </script>
 </body>
