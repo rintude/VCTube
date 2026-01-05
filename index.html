@@ -1,125 +1,237 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>VCTube</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kolkata Talks</title>
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <style>
+        :root {
+            --wa-green: #075e54;
+            --wa-light-green: #25d366;
+            --bg-gray: #e5ddd5;
+        }
 
-<style>
-body{
-  margin:0;
-  font-family:Arial;
-  background:#0b141a;
-  color:#fff;
-}
-header{
-  text-align:center;
-  padding:12px;
-  font-size:20px;
-  background:#111b21;
-}
-.container{
-  padding:10px;
-}
-video{
-  width:100%;
-  max-height:240px;
-  background:#000;
-  border-radius:8px;
-  object-fit:cover;
-  transform:scaleX(-1);
-}
-textarea,button{
-  width:100%;
-  margin-top:8px;
-  padding:10px;
-  border-radius:6px;
-  border:none;
-}
-button{
-  background:#25d366;
-  font-weight:bold;
-  cursor:pointer;
-}
-textarea{
-  height:90px;
-}
-</style>
+        body, html {
+            margin: 0; padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            height: 100%; background: #000;
+            overflow: hidden;
+        }
+
+        /* --- Splash Screen Animation --- */
+        #splash-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #000; display: flex; flex-direction: column;
+            justify-content: center; align-items: center; z-index: 100;
+            color: var(--wa-light-green);
+        }
+
+        .glitch {
+            font-size: 3rem; font-weight: bold;
+            text-transform: uppercase; letter-spacing: 5px;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.05); opacity: 0.7; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        /* --- Main UI --- */
+        #app-container {
+            display: none; height: 100vh; flex-direction: column;
+            background: var(--bg-gray);
+        }
+
+        header {
+            background: var(--wa-green); color: white;
+            padding: 15px; display: flex; justify-content: space-between; align-items: center;
+        }
+
+        #chat-window {
+            flex: 1; overflow-y: auto; padding: 20px;
+            display: flex; flex-direction: column; gap: 10px;
+        }
+
+        .msg {
+            max-width: 70%; padding: 10px; border-radius: 8px;
+            box-shadow: 0 1px 1px rgba(0,0,0,0.1);
+        }
+        .sent { align-self: flex-end; background: #dcf8c6; }
+        .received { align-self: flex-start; background: white; }
+
+        .controls {
+            padding: 15px; background: #f0f0f0; display: flex; gap: 10px;
+        }
+
+        input[type="text"] {
+            flex: 1; border: none; padding: 10px; border-radius: 20px; outline: none;
+        }
+
+        button {
+            border: none; background: var(--wa-green); color: white;
+            padding: 10px 15px; border-radius: 50%; cursor: pointer;
+        }
+
+        /* --- Video Overlay --- */
+        #video-grid {
+            position: absolute; top: 60px; left: 0; width: 100%; height: 40%;
+            background: #222; display: none; grid-template-columns: 1fr 1fr;
+        }
+
+        video { width: 100%; height: 100%; object-fit: cover; background: #333; }
+        
+        #connection-bar {
+            background: #333; color: white; font-size: 12px; padding: 5px; text-align: center;
+        }
+    </style>
 </head>
-
 <body>
 
-<header>VCTube — Pure WebRTC</header>
+    <div id="splash-screen">
+        <div class="glitch">KOLKATA TALKS</div>
+        <p>PREPARING SESSION...</p>
+    </div>
 
-<div class="container">
+    <div id="app-container">
+        <header>
+            <div style="font-weight: bold;">Kolkata Talks</div>
+            <div>
+                <button onclick="startCall(true)">📞</button>
+                <button onclick="startCall(false)">🎥</button>
+            </div>
+        </header>
+        
+        <div id="connection-bar">Your ID: <span id="my-id">...</span> | Target ID: <input id="target-id" placeholder="Enter Friend's ID" style="font-size:10px"></div>
 
-<video id="localVideo" autoplay muted playsinline></video>
-<video id="remoteVideo" autoplay playsinline></video>
+        <div id="video-grid">
+            <video id="localVideo" autoplay muted playsinline></video>
+            <video id="remoteVideo" autoplay playsinline></video>
+            <button onclick="endCall()" style="position:absolute; bottom:10px; left:50%; transform:translateX(-50%); background:red; border-radius: 5px;">End Call</button>
+        </div>
 
-<button onclick="createCall()">Create Call</button>
-<textarea id="offer" placeholder="Offer will appear here"></textarea>
+        <div id="chat-window"></div>
 
-<button onclick="joinCall()">Join Call</button>
-<textarea id="answer" placeholder="Paste Answer here"></textarea>
+        <div class="controls">
+            <input type="text" id="messageInput" placeholder="Type a message">
+            <button onclick="sendTextMessage()">➤</button>
+        </div>
+    </div>
 
-<button onclick="acceptAnswer()">Accept Answer</button>
+    <script>
+        // --- 1. CONFIGURATION & STATE ---
+        const myId = Math.floor(1000 + Math.random() * 9000).toString();
+        document.getElementById('my-id').innerText = myId;
 
-</div>
+        const client = mqtt.connect('wss://test.mosquitto.org:8081'); 
+        let localStream;
+        let peerConnection;
+        const config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 
-<script>
-let pc;
-let localStream;
+        // --- 2. INITIALIZATION ---
+        window.onload = () => {
+            setTimeout(() => {
+                document.getElementById('splash-screen').style.display = 'none';
+                document.getElementById('app-container').style.display = 'flex';
+            }, 3000);
+        };
 
-const servers = {
-  iceServers: [
-    { urls: "stun:stun.l.google.com:19302" }
-  ]
-};
+        client.on('connect', () => {
+            client.subscribe(`kolkata-talks/${myId}`);
+        });
 
-async function init() {
-  localStream = await navigator.mediaDevices.getUserMedia({
-    video: true,
-    audio: true
-  });
+        // --- 3. MESSAGING & SIGNALING ---
+        client.on('message', async (topic, message) => {
+            const data = JSON.parse(message.toString());
 
-  localVideo.srcObject = localStream;
+            if (data.type === 'text') {
+                displayMessage(data.content, 'received');
+            } else if (data.type === 'offer') {
+                handleOffer(data);
+            } else if (data.type === 'answer') {
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp));
+            } else if (data.type === 'ice-candidate') {
+                await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+            }
+        });
 
-  pc = new RTCPeerConnection(servers);
+        function sendTextMessage() {
+            const text = document.getElementById('messageInput').value;
+            const target = document.getElementById('target-id').value;
+            if (!text || !target) return alert("Enter Target ID & Message");
 
-  localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+            client.publish(`kolkata-talks/${target}`, JSON.stringify({ type: 'text', content: text }));
+            displayMessage(text, 'sent');
+            document.getElementById('messageInput').value = '';
+        }
 
-  pc.ontrack = e => {
-    remoteVideo.srcObject = e.streams[0];
-    remoteVideo.play().catch(()=>{});
-  };
-}
+        function displayMessage(text, side) {
+            const div = document.createElement('div');
+            div.className = `msg ${side}`;
+            div.innerText = text;
+            document.getElementById('chat-window').appendChild(div);
+            document.getElementById('chat-window').scrollTop = document.getElementById('chat-window').scrollHeight;
+        }
 
-async function createCall() {
-  await init();
+        // --- 4. VIDEO / AUDIO CALLING LOGIC ---
+        async function startCall(audioOnly) {
+            const target = document.getElementById('target-id').value;
+            if (!target) return alert("Enter Friend's ID first");
 
-  const offerDesc = await pc.createOffer();
-  await pc.setLocalDescription(offerDesc);
+            document.getElementById('video-grid').style.display = 'grid';
+            localStream = await navigator.mediaDevices.getUserMedia({ video: !audioOnly, audio: true });
+            document.getElementById('localVideo').srcObject = localStream;
 
-  offer.value = JSON.stringify(offerDesc);
-}
+            peerConnection = new RTCPeerConnection(config);
+            localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
 
-async function joinCall() {
-  await init();
+            peerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    client.publish(`kolkata-talks/${target}`, JSON.stringify({ type: 'ice-candidate', candidate: event.candidate }));
+                }
+            };
 
-  const offerDesc = JSON.parse(offer.value);
-  await pc.setRemoteDescription(offerDesc);
+            peerConnection.ontrack = (event) => {
+                document.getElementById('remoteVideo').srcObject = event.streams[0];
+            };
 
-  const answerDesc = await pc.createAnswer();
-  await pc.setLocalDescription(answerDesc);
+            const offer = await peerConnection.createOffer();
+            await peerConnection.setLocalDescription(offer);
+            client.publish(`kolkata-talks/${target}`, JSON.stringify({ type: 'offer', sdp: offer, sender: myId, audioOnly }));
+        }
 
-  answer.value = JSON.stringify(answerDesc);
-}
+        async function handleOffer(data) {
+            if (!confirm(`Incoming ${data.audioOnly ? 'Audio' : 'Video'} call from ${data.sender}. Accept?`)) return;
 
-async function acceptAnswer() {
-  const answerDesc = JSON.parse(answer.value);
-  await pc.setRemoteDescription(answerDesc);
-}
-</script>
+            document.getElementById('video-grid').style.display = 'grid';
+            localStream = await navigator.mediaDevices.getUserMedia({ video: !data.audioOnly, audio: true });
+            document.getElementById('localVideo').srcObject = localStream;
 
+            peerConnection = new RTCPeerConnection(config);
+            localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+
+            peerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    client.publish(`kolkata-talks/${data.sender}`, JSON.stringify({ type: 'ice-candidate', candidate: event.candidate }));
+                }
+            };
+
+            peerConnection.ontrack = (event) => {
+                document.getElementById('remoteVideo').srcObject = event.streams[0];
+            };
+
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp));
+            const answer = await peerConnection.createAnswer();
+            await peerConnection.setLocalDescription(answer);
+            client.publish(`kolkata-talks/${data.sender}`, JSON.stringify({ type: 'answer', sdp: answer }));
+        }
+
+        function endCall() {
+            location.reload(); // Simplest way to reset all RTC states
+        }
+    </script>
 </body>
 </html>
+
