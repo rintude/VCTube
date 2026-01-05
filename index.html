@@ -106,7 +106,10 @@ async function start() {
   roomInfo.innerText = "Room Code: " + room;
   peer = new Peer(room);
 
-  localStream = await navigator.mediaDevices.getUserMedia({video:true,audio:true});
+  localStream = await navigator.mediaDevices.getUserMedia({
+  video: { facingMode: "user" },
+  audio: true
+});
   addVideo(localStream);
 
   peer.on("call", call => {
@@ -136,8 +139,13 @@ function addVideo(stream) {
   v.srcObject = stream;
   v.autoplay = true;
   v.playsInline = true;
+  v.muted = true;          // ✅ REQUIRED FOR DESKTOP
+  v.onloadedmetadata = () => {
+    v.play().catch(()=>{}); // ✅ FORCE PLAY
+  };
   videoGrid.appendChild(v);
 }
+
 
 function endCall() {
   if (currentCall) currentCall.close();
