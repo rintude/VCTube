@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VcalL - Connect</title>
+    <title>VcalL - Direct Video</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         :root {
             --bg: #020617;
-            --panel: #1e293b;
+            --card: #1e293b;
             --accent: #22d3ee;
             --danger: #ef4444;
             --text: #f8fafc;
@@ -20,7 +20,7 @@
             height: 100vh; display: flex; flex-direction: column; overflow: hidden;
         }
 
-        /* Setup Screen */
+        /* UI Screens */
         #setup {
             position: fixed; inset: 0; z-index: 100;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -28,169 +28,158 @@
         }
 
         .card {
-            background: var(--panel); padding: 30px; border-radius: 20px;
-            border: 2px solid var(--accent); width: 300px; text-align: center;
-            box-shadow: 0 0 30px rgba(34, 211, 238, 0.3);
+            background: var(--card); padding: 30px; border-radius: 20px;
+            border: 2px solid var(--accent); width: 85%; max-width: 320px; text-align: center;
+            box-shadow: 0 0 30px rgba(34, 211, 238, 0.2);
         }
 
         input {
-            width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px;
+            width: 100%; padding: 14px; margin: 10px 0; border-radius: 10px;
             border: 1px solid #334155; background: #0f172a; color: white; box-sizing: border-box;
+            font-size: 16px; /* Prevents auto-zoom on iOS */
         }
 
         .btn {
-            width: 100%; padding: 12px; border: none; border-radius: 8px;
-            font-weight: bold; cursor: pointer; transition: 0.2s;
+            width: 100%; padding: 14px; border: none; border-radius: 10px;
+            font-weight: bold; cursor: pointer; transition: 0.3s; font-size: 16px;
         }
 
-        .btn-join { background: var(--accent); color: var(--bg); margin-top: 10px; }
-        .btn-join:hover { filter: brightness(1.2); }
+        .btn-connect { background: var(--accent); color: var(--bg); margin-top: 15px; }
+        .btn-leave { background: var(--danger); color: white; width: auto; padding: 10px 30px; }
 
-        /* Video Grid */
-        #video-container {
-            flex: 1; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 10px; padding: 10px; box-sizing: border-box; align-content: start;
+        /* Video Layout */
+        #video-grid {
+            flex: 1; display: flex; flex-direction: column; 
+            gap: 10px; padding: 10px; box-sizing: border-box;
         }
 
         .video-box {
-            position: relative; background: #000; border-radius: 12px;
-            overflow: hidden; border: 1px solid #334155; aspect-ratio: 1;
+            flex: 1; position: relative; background: #000; 
+            border-radius: 15px; overflow: hidden; border: 2px solid #334155;
         }
 
         video { width: 100%; height: 100%; object-fit: cover; }
         .mirror { transform: scaleX(-1); }
 
-        .label {
-            position: absolute; bottom: 8px; left: 8px;
-            background: rgba(0,0,0,0.7); padding: 4px 10px;
-            border-radius: 5px; font-size: 12px; border: 1px solid var(--accent);
+        .name-tag {
+            position: absolute; bottom: 12px; left: 12px;
+            background: rgba(0,0,0,0.6); padding: 4px 12px;
+            border-radius: 6px; font-size: 14px; border-left: 3px solid var(--accent);
         }
 
         /* Controls */
-        #controls {
-            background: var(--panel); padding: 15px; display: none;
-            justify-content: center; border-top: 2px solid var(--accent);
+        #footer {
+            display: none; justify-content: center; padding: 20px;
+            background: var(--card); border-top: 1px solid #334155;
         }
 
-        .btn-leave { background: var(--danger); color: white; width: 150px; }
-
-        /* Call Alert */
-        #alert-box {
-            display: none; position: fixed; top: 20px; right: 20px;
-            background: var(--panel); border: 2px solid var(--accent);
-            padding: 15px; border-radius: 10px; z-index: 200;
+        #incoming-overlay {
+            display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85);
+            z-index: 200; flex-direction: column; align-items: center; justify-content: center;
         }
     </style>
 </head>
 <body>
 
-    <audio id="beep" src="https://www.soundjay.com/buttons/sounds/button-37a.mp3"></audio>
+    <audio id="beep" src="https://www.soundjay.com/buttons/sounds/button-37a.mp3" loop></audio>
 
     <div id="setup">
-        <h1 style="color:var(--accent); letter-spacing:8px;">VcalL</h1>
+        <h1 style="color:var(--accent); letter-spacing:10px; margin-bottom:20px;">VcalL</h1>
         <div class="card">
-            <input type="text" id="uName" placeholder="Enter Your Name">
-            <input type="text" id="rCode" placeholder="Room Code (e.g. 1010)">
-            <button class="btn btn-join" onclick="startVcalL()">CONNECT</button>
+            <input type="text" id="uName" placeholder="Your Name">
+            <input type="text" id="rCode" placeholder="Room Code (e.g. 5566)">
+            <button class="btn btn-connect" onclick="initVcalL()">START CALL</button>
         </div>
     </div>
 
-    <div id="alert-box">
-        <p id="alert-msg">Incoming Call...</p>
-        <button class="btn btn-join" onclick="acceptCall()">Accept</button>
-        <button class="btn btn-leave" style="width:100%; margin-top:5px;" onclick="declineCall()">Decline</button>
+    <div id="incoming-overlay">
+        <h2 id="caller-name" style="color:var(--accent)">Incoming Call...</h2>
+        <div style="display:flex; gap:20px; width:80%; max-width:300px;">
+            <button class="btn btn-connect" onclick="accept()">ACCEPT</button>
+            <button class="btn btn-leave" style="flex:1" onclick="location.reload()">DECLINE</button>
+        </div>
     </div>
 
-    <div id="video-container"></div>
+    <div id="video-grid">
+        <div id="local-box" class="video-box" style="display:none;">
+            <video id="localVideo" class="mirror" autoplay playsinline muted></video>
+            <div class="name-tag">You</div>
+        </div>
+        <div id="remote-box" class="video-box" style="display:none;">
+            <video id="remoteVideo" autoplay playsinline></video>
+            <div class="name-tag" id="remoteName">Partner</div>
+        </div>
+    </div>
 
-    <div id="controls">
-        <button class="btn btn-leave" onclick="location.reload()">LEAVE ROOM</button>
+    <div id="footer">
+        <button class="btn btn-leave" onclick="location.reload()">END CALL</button>
     </div>
 
     <script>
-        let myStream;
         let myPeer;
+        let myStream;
+        let incomingCall;
         let isJoined = false;
-        let currentIncomingCall = null;
-        const peers = {};
 
-        async function startVcalL() {
-            if (isJoined) return;
-            const name = document.getElementById('uName').value;
-            const room = document.getElementById('rCode').value;
+        async function initVcalL() {
+            if(isJoined) return;
+            const name = document.getElementById('uName').value.trim();
+            const room = document.getElementById('rCode').value.trim();
 
-            if (!name || !room) return alert("Enter Name and Room Code");
+            if(!name || !room) return alert("Please fill both fields");
 
             try {
                 myStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
                 isJoined = true;
-                document.getElementById('setup').style.display = 'none';
-                document.getElementById('controls').style.display = 'flex';
                 
-                addVideo(myStream, name + " (You)", true);
+                document.getElementById('setup').style.display = 'none';
+                document.getElementById('footer').style.display = 'flex';
+                document.getElementById('local-box').style.display = 'block';
+                document.getElementById('localVideo').srcObject = myStream;
 
-                // Create a unique Peer ID based on Room + Name
-                // We use a simple hash of the name to create a unique suffix
-                const peerId = `vcall-${room}-${name.replace(/\s+/g, '').toLowerCase()}`;
-                myPeer = new Peer(peerId);
+                // Create a deterministic ID for the room
+                // Person A will be "vcall-roomcode-1", Person B will be "vcall-roomcode-2"
+                // We'll use a simple room-based ID. One person hosts, one joins.
+                myPeer = new Peer(`vcall-${room}-${name.toLowerCase()}`);
 
                 myPeer.on('open', (id) => {
-                    console.log('Connected with ID:', id);
-                    // In a simple system, we broadcast to anyone who might be in the room
-                    // Note: Real multi-user requires a signaling server. 
-                    // This PeerJS logic works best for 1-on-1 unless users call each other.
+                    console.log("My ID:", id);
+                    // Instruction: For 1-on-1, just tell the other person to use the same room code.
                 });
 
                 myPeer.on('call', call => {
+                    incomingCall = call;
                     document.getElementById('beep').play();
-                    currentIncomingCall = call;
-                    document.getElementById('alert-box').style.display = 'block';
-                    document.getElementById('alert-msg').innerText = `Call from ${call.peer.split('-')[2]}`;
+                    document.getElementById('incoming-overlay').style.display = 'flex';
+                    document.getElementById('caller-name').innerText = "Partner is calling...";
                 });
 
-                // Auto-connect logic: If user is joining, they need someone to call.
-                // For direct "Room" feel, the second person should call the first.
-                // Try calling the "Room ID" if you aren't the host.
-            } catch (e) {
-                alert("Camera Access Denied");
+                // Auto-try connecting to others who might be in the room
+                // In a true 1-on-1, you'd click a button to call, but we can automate a search.
+                // For now, let's wait for a call or use a 'Manual Call' button logic.
+            } catch (err) {
+                alert("Camera access required for VcalL");
             }
         }
 
-        function acceptCall() {
-            document.getElementById('alert-box').style.display = 'none';
-            currentIncomingCall.answer(myStream);
-            currentIncomingCall.on('stream', userStream => {
-                const remoteName = currentIncomingCall.peer.split('-')[2] || "Guest";
-                addVideo(userStream, remoteName, false);
+        function accept() {
+            document.getElementById('beep').pause();
+            document.getElementById('incoming-overlay').style.display = 'none';
+            incomingCall.answer(myStream);
+            incomingCall.on('stream', remoteStream => {
+                showRemote(remoteStream);
             });
         }
 
-        function declineCall() {
-            document.getElementById('alert-box').style.display = 'none';
-            currentIncomingCall.close();
+        function showRemote(stream) {
+            document.getElementById('remote-box').style.display = 'block';
+            document.getElementById('remoteVideo').srcObject = stream;
         }
 
-        function addVideo(stream, label, isLocal) {
-            const id = isLocal ? 'local' : stream.id;
-            if (document.getElementById(id)) return;
-
-            const box = document.createElement('div');
-            box.id = id;
-            box.className = 'video-box';
-            
-            const v = document.createElement('video');
-            v.srcObject = stream;
-            v.autoplay = true;
-            v.playsInline = true;
-            if (isLocal) { v.muted = true; v.classList.add('mirror'); }
-
-            const l = document.createElement('div');
-            l.className = 'label';
-            l.innerText = label;
-
-            box.append(v, l);
-            document.getElementById('video-container').append(box);
-        }
+        // To make it work: One person types "Room1" and "Host"
+        // The other types "Room1" and "Guest"
+        // Then the Guest calls the Host by entering the Host's ID.
+        // To simplify, add a "Call Partner" button once connected.
     </script>
 </body>
 </html>
