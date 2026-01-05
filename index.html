@@ -3,233 +3,242 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kolkata Talks</title>
+    <title>Kolkata Talks | Secure Chat</title>
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <style>
         :root {
             --wa-green: #075e54;
+            --wa-teal: #128c7e;
             --wa-light-green: #25d366;
-            --bg-gray: #e5ddd5;
+            --bg-gray: #f0f2f5;
+            --chat-bg: #e5ddd5;
         }
 
-        body, html {
-            margin: 0; padding: 0;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            height: 100%; background: #000;
-            overflow: hidden;
-        }
+        body, html { margin: 0; padding: 0; height: 100%; font-family: 'Segoe UI', sans-serif; overflow: hidden; }
 
-        /* --- Splash Screen Animation --- */
+        /* --- Splash Screen --- */
         #splash-screen {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: #000; display: flex; flex-direction: column;
-            justify-content: center; align-items: center; z-index: 100;
-            color: var(--wa-light-green);
+            background: #0b141a; display: flex; flex-direction: column;
+            justify-content: center; align-items: center; z-index: 1000;
         }
-
         .glitch {
-            font-size: 3rem; font-weight: bold;
-            text-transform: uppercase; letter-spacing: 5px;
-            animation: pulse 1.5s infinite;
+            color: var(--wa-light-green); font-size: 3.5rem; font-weight: 800;
+            letter-spacing: 10px; text-shadow: 0 0 10px var(--wa-light-green);
+            animation: start-anim 2s ease-in-out;
+        }
+        @keyframes start-anim {
+            0% { letter-spacing: -20px; opacity: 0; filter: blur(10px); }
+            100% { letter-spacing: 10px; opacity: 1; filter: blur(0); }
         }
 
-        @keyframes pulse {
-            0% { transform: scale(1); opacity: 1; }
-            50% { transform: scale(1.05); opacity: 0.7; }
-            100% { transform: scale(1); opacity: 1; }
-        }
+        /* --- Main Layout --- */
+        #app-container { display: none; height: 100vh; grid-template-columns: 300px 1fr; }
 
-        /* --- Main UI --- */
-        #app-container {
-            display: none; height: 100vh; flex-direction: column;
-            background: var(--bg-gray);
+        /* Sidebar */
+        #sidebar { background: white; border-right: 1px solid #ddd; display: flex; flex-direction: column; }
+        .sidebar-header { background: #ededed; padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; }
+        .contact-item { 
+            padding: 15px; border-bottom: 1px solid #f2f2f2; cursor: pointer; transition: 0.3s;
+            display: flex; align-items: center; gap: 10px;
         }
+        .contact-item:hover { background: #f5f5f5; }
+        .avatar { width: 40px; height: 40px; border-radius: 50%; background: #ccc; }
 
-        header {
-            background: var(--wa-green); color: white;
-            padding: 15px; display: flex; justify-content: space-between; align-items: center;
-        }
+        /* Main Chat Area */
+        #main-chat { display: flex; flex-direction: column; background: var(--chat-bg); position: relative; }
+        header { background: var(--wa-green); color: white; padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; }
 
-        #chat-window {
-            flex: 1; overflow-y: auto; padding: 20px;
-            display: flex; flex-direction: column; gap: 10px;
-        }
+        #chat-window { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 8px; }
+        .msg { max-width: 65%; padding: 8px 12px; border-radius: 8px; font-size: 14px; position: relative; }
+        .sent { align-self: flex-end; background: #dcf8c6; box-shadow: 0 1px 1px rgba(0,0,0,0.1); }
+        .received { align-self: flex-start; background: white; box-shadow: 0 1px 1px rgba(0,0,0,0.1); }
 
-        .msg {
-            max-width: 70%; padding: 10px; border-radius: 8px;
-            box-shadow: 0 1px 1px rgba(0,0,0,0.1);
-        }
-        .sent { align-self: flex-end; background: #dcf8c6; }
-        .received { align-self: flex-start; background: white; }
+        /* Controls */
+        .controls { background: #f0f0f0; padding: 10px; display: flex; align-items: center; gap: 10px; }
+        input[type="text"] { flex: 1; border: none; padding: 12px; border-radius: 25px; outline: none; }
+        .btn-round { background: var(--wa-teal); color: white; border: none; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; }
 
-        .controls {
-            padding: 15px; background: #f0f0f0; display: flex; gap: 10px;
+        /* Call UI Overlay */
+        #video-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: #000; display: none; z-index: 500;
         }
-
-        input[type="text"] {
-            flex: 1; border: none; padding: 10px; border-radius: 20px; outline: none;
-        }
-
-        button {
-            border: none; background: var(--wa-green); color: white;
-            padding: 10px 15px; border-radius: 50%; cursor: pointer;
-        }
-
-        /* --- Video Overlay --- */
-        #video-grid {
-            position: absolute; top: 60px; left: 0; width: 100%; height: 40%;
-            background: #222; display: none; grid-template-columns: 1fr 1fr;
-        }
-
-        video { width: 100%; height: 100%; object-fit: cover; background: #333; }
-        
-        #connection-bar {
-            background: #333; color: white; font-size: 12px; padding: 5px; text-align: center;
-        }
+        .video-box { position: relative; height: 100%; display: grid; grid-template-rows: 1fr 1fr; }
+        video { width: 100%; height: 100%; object-fit: cover; }
+        .call-tools { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); display: flex; gap: 20px; }
+        .btn-hangup { background: #ff3b30; color: white; padding: 15px 30px; border-radius: 30px; border: none; cursor: pointer; font-weight: bold;}
     </style>
 </head>
 <body>
 
     <div id="splash-screen">
         <div class="glitch">KOLKATA TALKS</div>
-        <p>PREPARING SESSION...</p>
+        <div style="color: #666; margin-top: 10px;">V 1.0 - READY TO CONNECT</div>
     </div>
 
     <div id="app-container">
-        <header>
-            <div style="font-weight: bold;">Kolkata Talks</div>
-            <div>
-                <button onclick="startCall(true)">📞</button>
-                <button onclick="startCall(false)">🎥</button>
+        <div id="sidebar">
+            <div class="sidebar-header">
+                <div style="font-weight: bold; color: var(--wa-green);">My ID: <span id="my-id-display">...</span></div>
+                <button onclick="addContact()" style="background: none; border: none; font-size: 20px; cursor: pointer;">➕</button>
             </div>
-        </header>
-        
-        <div id="connection-bar">Your ID: <span id="my-id">...</span> | Target ID: <input id="target-id" placeholder="Enter Friend's ID" style="font-size:10px"></div>
-
-        <div id="video-grid">
-            <video id="localVideo" autoplay muted playsinline></video>
-            <video id="remoteVideo" autoplay playsinline></video>
-            <button onclick="endCall()" style="position:absolute; bottom:10px; left:50%; transform:translateX(-50%); background:red; border-radius: 5px;">End Call</button>
+            <div id="contacts-list" style="overflow-y: auto; flex: 1;">
+                </div>
         </div>
 
-        <div id="chat-window"></div>
+        <div id="main-chat">
+            <header>
+                <div id="current-contact-name">Select a contact</div>
+                <div id="call-btns" style="display: none;">
+                    <button class="btn-round" onclick="initiateCall(true)">📞</button>
+                    <button class="btn-round" onclick="initiateCall(false)">🎥</button>
+                </div>
+            </header>
 
-        <div class="controls">
-            <input type="text" id="messageInput" placeholder="Type a message">
-            <button onclick="sendTextMessage()">➤</button>
+            <div id="chat-window"></div>
+
+            <div id="video-overlay">
+                <div class="video-box">
+                    <video id="remoteVideo" autoplay playsinline></video>
+                    <video id="localVideo" autoplay muted playsinline></video>
+                </div>
+                <div class="call-tools">
+                    <button class="btn-hangup" onclick="endCall()">End Connection</button>
+                </div>
+            </div>
+
+            <div class="controls">
+                <input type="text" id="msgInput" placeholder="Type a message...">
+                <button class="btn-round" onclick="sendMessage()">➤</button>
+            </div>
         </div>
     </div>
 
     <script>
-        // --- 1. CONFIGURATION & STATE ---
+        // --- 1. CONFIG & SETUP ---
         const myId = Math.floor(1000 + Math.random() * 9000).toString();
-        document.getElementById('my-id').innerText = myId;
-
-        const client = mqtt.connect('wss://test.mosquitto.org:8081'); 
+        document.getElementById('my-id-display').innerText = myId;
+        
+        const client = mqtt.connect('wss://test.mosquitto.org:8081');
+        let currentTarget = null;
+        let contacts = JSON.parse(localStorage.getItem('kt_contacts') || '[]');
+        let peerConn;
         let localStream;
-        let peerConnection;
-        const config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 
         // --- 2. INITIALIZATION ---
         window.onload = () => {
+            renderContacts();
             setTimeout(() => {
                 document.getElementById('splash-screen').style.display = 'none';
-                document.getElementById('app-container').style.display = 'flex';
-            }, 3000);
+                document.getElementById('app-container').style.display = 'grid';
+            }, 2500);
         };
 
-        client.on('connect', () => {
-            client.subscribe(`kolkata-talks/${myId}`);
-        });
+        client.on('connect', () => client.subscribe(`kt/${myId}`));
 
-        // --- 3. MESSAGING & SIGNALING ---
+        // --- 3. CONTACT MANAGEMENT ---
+        function addContact() {
+            const id = prompt("Enter Friend's ID:");
+            if (id && id !== myId && !contacts.includes(id)) {
+                contacts.push(id);
+                localStorage.setItem('kt_contacts', JSON.stringify(contacts));
+                renderContacts();
+            }
+        }
+
+        function renderContacts() {
+            const list = document.getElementById('contacts-list');
+            list.innerHTML = '';
+            contacts.forEach(id => {
+                const div = document.createElement('div');
+                div.className = 'contact-item';
+                div.innerHTML = `<div class="avatar"></div> <div><strong>User ${id}</strong></div>`;
+                div.onclick = () => selectContact(id);
+                list.appendChild(div);
+            });
+        }
+
+        function selectContact(id) {
+            currentTarget = id;
+            document.getElementById('current-contact-name').innerText = `Chatting with: ${id}`;
+            document.getElementById('call-btns').style.display = 'block';
+            document.getElementById('chat-window').innerHTML = ''; // Clear for fresh view
+        }
+
+        // --- 4. TEXT CHATTING ---
+        function sendMessage() {
+            const val = document.getElementById('msgInput').value;
+            if (!val || !currentTarget) return;
+            client.publish(`kt/${currentTarget}`, JSON.stringify({ type: 'text', content: val, from: myId }));
+            appendMsg(val, 'sent');
+            document.getElementById('msgInput').value = '';
+        }
+
+        function appendMsg(text, type) {
+            const div = document.createElement('div');
+            div.className = `msg ${type}`;
+            div.innerText = text;
+            const win = document.getElementById('chat-window');
+            win.appendChild(div);
+            win.scrollTop = win.scrollHeight;
+        }
+
+        // --- 5. SIGNALING & WEBRTC ---
         client.on('message', async (topic, message) => {
             const data = JSON.parse(message.toString());
-
+            
             if (data.type === 'text') {
-                displayMessage(data.content, 'received');
-            } else if (data.type === 'offer') {
-                handleOffer(data);
-            } else if (data.type === 'answer') {
-                await peerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp));
-            } else if (data.type === 'ice-candidate') {
-                await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
-            }
+                if (!contacts.includes(data.from)) {
+                    contacts.push(data.from);
+                    localStorage.setItem('kt_contacts', JSON.stringify(contacts));
+                    renderContacts();
+                }
+                if (currentTarget === data.from) appendMsg(data.content, 'received');
+            } 
+            else if (data.type === 'offer') handleIncomingCall(data);
+            else if (data.type === 'answer') await peerConn.setRemoteDescription(new RTCSessionDescription(data.sdp));
+            else if (data.type === 'ice') await peerConn.addIceCandidate(new RTCIceCandidate(data.candidate));
         });
 
-        function sendTextMessage() {
-            const text = document.getElementById('messageInput').value;
-            const target = document.getElementById('target-id').value;
-            if (!text || !target) return alert("Enter Target ID & Message");
-
-            client.publish(`kolkata-talks/${target}`, JSON.stringify({ type: 'text', content: text }));
-            displayMessage(text, 'sent');
-            document.getElementById('messageInput').value = '';
-        }
-
-        function displayMessage(text, side) {
-            const div = document.createElement('div');
-            div.className = `msg ${side}`;
-            div.innerText = text;
-            document.getElementById('chat-window').appendChild(div);
-            document.getElementById('chat-window').scrollTop = document.getElementById('chat-window').scrollHeight;
-        }
-
-        // --- 4. VIDEO / AUDIO CALLING LOGIC ---
-        async function startCall(audioOnly) {
-            const target = document.getElementById('target-id').value;
-            if (!target) return alert("Enter Friend's ID first");
-
-            document.getElementById('video-grid').style.display = 'grid';
-            localStream = await navigator.mediaDevices.getUserMedia({ video: !audioOnly, audio: true });
+        async function initiateCall(isAudio) {
+            setupRTC();
+            localStream = await navigator.mediaDevices.getUserMedia({ video: !isAudio, audio: true });
             document.getElementById('localVideo').srcObject = localStream;
-
-            peerConnection = new RTCPeerConnection(config);
-            localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
-
-            peerConnection.onicecandidate = (event) => {
-                if (event.candidate) {
-                    client.publish(`kolkata-talks/${target}`, JSON.stringify({ type: 'ice-candidate', candidate: event.candidate }));
-                }
-            };
-
-            peerConnection.ontrack = (event) => {
-                document.getElementById('remoteVideo').srcObject = event.streams[0];
-            };
-
-            const offer = await peerConnection.createOffer();
-            await peerConnection.setLocalDescription(offer);
-            client.publish(`kolkata-talks/${target}`, JSON.stringify({ type: 'offer', sdp: offer, sender: myId, audioOnly }));
+            document.getElementById('video-overlay').style.display = 'block';
+            
+            localStream.getTracks().forEach(t => peerConn.addTrack(t, localStream));
+            const offer = await peerConn.createOffer();
+            await peerConn.setLocalDescription(offer);
+            client.publish(`kt/${currentTarget}`, JSON.stringify({ type: 'offer', sdp: offer, from: myId, audioOnly: isAudio }));
         }
 
-        async function handleOffer(data) {
-            if (!confirm(`Incoming ${data.audioOnly ? 'Audio' : 'Video'} call from ${data.sender}. Accept?`)) return;
-
-            document.getElementById('video-grid').style.display = 'grid';
+        async function handleIncomingCall(data) {
+            if (!confirm(`User ${data.from} is calling. Accept?`)) return;
+            currentTarget = data.from;
+            setupRTC();
+            document.getElementById('video-overlay').style.display = 'block';
+            
             localStream = await navigator.mediaDevices.getUserMedia({ video: !data.audioOnly, audio: true });
             document.getElementById('localVideo').srcObject = localStream;
+            localStream.getTracks().forEach(t => peerConn.addTrack(t, localStream));
 
-            peerConnection = new RTCPeerConnection(config);
-            localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+            await peerConn.setRemoteDescription(new RTCSessionDescription(data.sdp));
+            const answer = await peerConn.createAnswer();
+            await peerConn.setLocalDescription(answer);
+            client.publish(`kt/${data.from}`, JSON.stringify({ type: 'answer', sdp: answer }));
+        }
 
-            peerConnection.onicecandidate = (event) => {
-                if (event.candidate) {
-                    client.publish(`kolkata-talks/${data.sender}`, JSON.stringify({ type: 'ice-candidate', candidate: event.candidate }));
-                }
+        function setupRTC() {
+            peerConn = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+            peerConn.onicecandidate = e => {
+                if (e.candidate) client.publish(`kt/${currentTarget}`, JSON.stringify({ type: 'ice', candidate: e.candidate }));
             };
-
-            peerConnection.ontrack = (event) => {
-                document.getElementById('remoteVideo').srcObject = event.streams[0];
-            };
-
-            await peerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp));
-            const answer = await peerConnection.createAnswer();
-            await peerConnection.setLocalDescription(answer);
-            client.publish(`kolkata-talks/${data.sender}`, JSON.stringify({ type: 'answer', sdp: answer }));
+            peerConn.ontrack = e => document.getElementById('remoteVideo').srcObject = e.streams[0];
         }
 
         function endCall() {
-            location.reload(); // Simplest way to reset all RTC states
+            location.reload();
         }
     </script>
 </body>
