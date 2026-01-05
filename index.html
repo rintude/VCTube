@@ -1,166 +1,124 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
 <meta charset="UTF-8">
 <title>VCTube</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
-<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-
 <style>
-body {
-  margin: 0;
-  font-family: Arial, sans-serif;
-  background: #0b141a;
-  color: #fff;
+body{
+  margin:0;
+  font-family:Arial;
+  background:#0b141a;
+  color:#fff;
 }
-header {
-  padding: 12px;
-  text-align: center;
-  background: #111b21;
-  font-size: 20px;
+header{
+  text-align:center;
+  padding:12px;
+  font-size:20px;
+  background:#111b21;
 }
-#controls {
-  display: flex;
-  justify-content: center;
-  gap: 8px;
-  padding: 10px;
+.container{
+  padding:10px;
 }
-input, button {
-  padding: 10px;
-  border-radius: 6px;
-  border: none;
+video{
+  width:100%;
+  max-height:240px;
+  background:#000;
+  border-radius:8px;
+  object-fit:cover;
+  transform:scaleX(-1);
 }
-button {
-  background: #25d366;
-  font-weight: bold;
-  cursor: pointer;
+textarea,button{
+  width:100%;
+  margin-top:8px;
+  padding:10px;
+  border-radius:6px;
+  border:none;
 }
-#videos {
-  display: flex;
-  gap: 10px;
-  padding: 10px;
+button{
+  background:#25d366;
+  font-weight:bold;
+  cursor:pointer;
 }
-video {
-  width: 50%;
-  background: black;
-  border-radius: 8px;
-  object-fit: cover;
-  transform: scaleX(-1);
-}
-#chat {
-  position: fixed;
-  bottom: 0;
-  width: 100%;
-  background: #111b21;
-}
-#messages {
-  max-height: 160px;
-  overflow-y: auto;
-  padding: 8px;
-}
-#send {
-  display: flex;
-}
-#send input {
-  flex: 1;
+textarea{
+  height:90px;
 }
 </style>
 </head>
 
 <body>
 
-<header>VCTube</header>
+<header>VCTube — Pure WebRTC</header>
 
-<div id="controls">
-  <input id="roomId" placeholder="Room Code">
-  <button onclick="start()">Create / Join</button>
-</div>
+<div class="container">
 
-<div id="videos">
-  <video id="localVideo" muted playsinline></video>
-  <video id="remoteVideo" playsinline></video>
-</div>
+<video id="localVideo" autoplay muted playsinline></video>
+<video id="remoteVideo" autoplay playsinline></video>
 
-<div id="chat">
-  <div id="messages"></div>
-  <div id="send">
-    <input id="msg" placeholder="Type message">
-    <button onclick="sendMsg()">Send</button>
-  </div>
+<button onclick="createCall()">Create Call</button>
+<textarea id="offer" placeholder="Offer will appear here"></textarea>
+
+<button onclick="joinCall()">Join Call</button>
+<textarea id="answer" placeholder="Paste Answer here"></textarea>
+
+<button onclick="acceptAnswer()">Accept Answer</button>
+
 </div>
 
 <script>
-let peer;
-let conn;
-let call;
+let pc;
 let localStream;
 
-async function start() {
-  let room = roomId.value.trim();
-  if (!room) {
-    room = Math.random().toString(36).substring(2, 8).toUpperCase();
-    alert("Room Code: " + room);
-  }
+const servers = {
+  iceServers: [
+    { urls: "stun:stun.l.google.com:19302" }
+  ]
+};
 
-  peer = new Peer(room);
-
+async function init() {
   localStream = await navigator.mediaDevices.getUserMedia({
     video: true,
     audio: true
   });
 
   localVideo.srcObject = localStream;
-  localVideo.muted = true;
-  localVideo.onloadedmetadata = () => localVideo.play();
 
-  peer.on("call", incomingCall => {
-    incomingCall.answer(localStream);
-    incomingCall.on("stream", stream => {
-      remoteVideo.srcObject = stream;
-      remoteVideo.muted = false;
-      remoteVideo.onloadedmetadata = () => remoteVideo.play();
-    });
-  });
+  pc = new RTCPeerConnection(servers);
 
-  peer.on("connection", c => {
-    conn = c;
-    conn.on("data", d => addMsg("Friend", d));
-  });
+  localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
 
-  peer.on("open", () => {
-    if (roomId.value) {
-      call = peer.call(room, localStream);
-      call.on("stream", stream => {
-        remoteVideo.srcObject = stream;
-        remoteVideo.muted = false;
-        remoteVideo.onloadedmetadata = () => remoteVideo.play();
-      });
-
-      conn = peer.connect(room);
-      conn.on("data", d => addMsg("Friend", d));
-    }
-  });
+  pc.ontrack = e => {
+    remoteVideo.srcObject = e.streams[0];
+    remoteVideo.play().catch(()=>{});
+  };
 }
 
-function sendMsg() {
-  if (conn && msg.value) {
-    conn.send(msg.value);
-    addMsg("You", msg.value);
-    msg.value = "";
-  }
+async function createCall() {
+  await init();
+
+  const offerDesc = await pc.createOffer();
+  await pc.setLocalDescription(offerDesc);
+
+  offer.value = JSON.stringify(offerDesc);
 }
 
-function addMsg(who, text) {
-  messages.innerHTML += `<div><b>${who}:</b> ${text}</div>`;
-  messages.scrollTop = messages.scrollHeight;
+async function joinCall() {
+  await init();
+
+  const offerDesc = JSON.parse(offer.value);
+  await pc.setRemoteDescription(offerDesc);
+
+  const answerDesc = await pc.createAnswer();
+  await pc.setLocalDescription(answerDesc);
+
+  answer.value = JSON.stringify(answerDesc);
 }
 
-const roomId = document.getElementById("roomId");
-const localVideo = document.getElementById("localVideo");
-const remoteVideo = document.getElementById("remoteVideo");
-const msg = document.getElementById("msg");
-const messages = document.getElementById("messages");
+async function acceptAnswer() {
+  const answerDesc = JSON.parse(answer.value);
+  await pc.setRemoteDescription(answerDesc);
+}
 </script>
 
 </body>
